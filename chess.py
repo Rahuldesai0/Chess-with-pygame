@@ -30,6 +30,10 @@ ROOK = 4
 QUEEN = 5
 KING = 6
 
+pygame.mixer.init()
+move_sound = pygame.mixer.Sound(os.path.join("audio", "move.mp3"))
+capture_sound = pygame.mixer.Sound(os.path.join("audio", "capture.mp3"))
+
 # Piece mapping for FEN
 fen_piece_map = {
     'P': WHITE | PAWN, 'N': WHITE | KNIGHT, 'B': WHITE | BISHOP, 'R': WHITE | ROOK, 'Q': WHITE | QUEEN, 'K': WHITE | KING,
@@ -197,6 +201,12 @@ def main():
                     row = (my - MARGIN_HEIGHT) // SQUARE_SIZE
                     if 0 <= row < 8 and 0 <= col < 8:
                         capture = board[row][col] != 0
+
+                        if capture:
+                            capture_sound.play()
+                        else:
+                            move_sound.play()
+
                         move_notation = print_move_notation(selected_piece, selected_pos, (row, col), capture)
                         
                         # Update move log with white/black on same line
