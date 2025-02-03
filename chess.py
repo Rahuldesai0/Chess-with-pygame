@@ -90,33 +90,48 @@ def load_pieces():
         pieces[code] = pygame.transform.smoothscale(image, (SQUARE_SIZE, SQUARE_SIZE))
     return pieces
 
-def draw_board(win):
+HIGHLIGHT_COLOR = (255, 0, 0)      # Red for legal moves
+SELECTED_COLOR = (255, 165, 0)     # Orange for selected piece
+
+def draw_board(win, legal_moves=None, selected_pos=None):
     font = pygame.font.Font(None, FONT_SIZE)
     board_x = MARGIN_WIDTH
     board_y = MARGIN_HEIGHT
     
     for row in range(8):
         for col in range(8):
-            color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN
-            pygame.draw.rect(win, color, (board_x + col * SQUARE_SIZE, board_y + row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+            # Determine base color
+            base_color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN
+            if (row, col) == selected_pos:
+                color = SELECTED_COLOR
+            elif legal_moves and (row, col) in legal_moves:
+                color = HIGHLIGHT_COLOR
+            else:
+                color = base_color
+            
+            pygame.draw.rect(win, color, (board_x + col * SQUARE_SIZE, 
+                                         board_y + row * SQUARE_SIZE, 
+                                         SQUARE_SIZE, SQUARE_SIZE))
     
-    # Labels: 1-8 on the left side, A-H on the bottom
+    # Labels
     for i in range(8):
         label = font.render(str(8 - i), True, TEXT_COLOR)
-        win.blit(label, (board_x - 30, board_y + i * SQUARE_SIZE + SQUARE_SIZE // 2))  # Number labels on the left
+        win.blit(label, (board_x - 30, board_y + i * SQUARE_SIZE + SQUARE_SIZE // 2))
         
         label = font.render(chr(65 + i), True, TEXT_COLOR)
-        win.blit(label, (board_x + i * SQUARE_SIZE + SQUARE_SIZE // 2.5, board_y + BOARD_SIZE + 10))  # Letter labels on the bottom
+        win.blit(label, (board_x + i * SQUARE_SIZE + SQUARE_SIZE // 2.5, 
+                        board_y + BOARD_SIZE + 10))
 
-def draw_pieces(win, pieces):
+def draw_pieces(win, pieces, selected_pos=None):
     board_x = MARGIN_WIDTH
     board_y = MARGIN_HEIGHT
     
     for row in range(8):
         for col in range(8):
             piece = board[row][col]
-            if piece != EMPTY:
-                win.blit(pieces[piece], (board_x + col * SQUARE_SIZE, board_y + row * SQUARE_SIZE))
+            if piece != EMPTY and (row, col) != selected_pos:
+                win.blit(pieces[piece], (board_x + col * SQUARE_SIZE, 
+                                        board_y + row * SQUARE_SIZE))
 
 def get_algebraic_notation(row, col):
     return f"{chr(97 + col)}{8 - row}"
@@ -136,6 +151,105 @@ def print_move_notation(selected_piece, start_pos, end_pos, capture):
     
     print("Move played:", notation)
     return notation
+
+def get_legal_moves(board, pos):
+    """Calculate all legal moves for a piece at the given position"""
+    row, col = pos
+    piece = board[row][col]
+    if piece == EMPTY:
+        return []
+    
+    piece_type = piece & 7  # Extract piece type
+    color = piece & 24      # Extract color
+    legal_moves = []
+
+    # Helper function
+    def is_valid(r, c):
+        if 0 <= r < 8 and 0 <= c < 8:
+            target = board[r][c]
+            return target == EMPTY or (target & 24) != color
+        return False
+
+    # Pawn moves
+    if piece_type == PAWN:
+        direction = -1 if color == WHITE else 1
+        # Normal moves
+        if is_valid(row + direction, col) and board[row + direction][col] == EMPTY:
+            legal_moves.append((row + direction, col))
+            # Double step
+            if (color == WHITE and row == 6) or (color == BLACK and row == 1):
+                if board[row + 2*direction][col] == EMPTY:
+                    legal_moves.append((row + 2*direction, col))
+        # Captures
+        for dc in [-1, 1]:
+            if is_valid(row + direction, col + dc) and board[row + direction][col + dc] != EMPTY:
+                legal_moves.append((row + direction, col + dc))
+
+    # Knight moves
+    elif piece_type == KNIGHT:
+        moves = [(-2,-1), (-1,-2), (1,-2), (2,-1),
+                 (2,1), (1,2), (-1,2), (-2,1)]
+        for dr, dc in moves:
+            if is_valid(row + dr, col + dc):
+                legal_moves.append((row + dr, col + dc))
+
+    # Bishop moves
+    elif piece_type == BISHOP:
+        directions = [(-1,-1), (-1,1), (1,-1), (1,1)]
+        for dr, dc in directions:
+            r, c = row + dr, col + dc
+            while 0 <= r < 8 and 0 <= c < 8:
+                if board[r][c] == EMPTY:
+                    legal_moves.append((r, c))
+                else:
+                    if (board[r][c] & 24) != color:
+                        legal_moves.append((r, c))
+                    break
+                r += dr
+                c += dc
+
+    # Rook moves
+    elif piece_type == ROOK:
+        directions = [(-1,0), (1,0), (0,-1), (0,1)]
+        for dr, dc in directions:
+            r, c = row + dr, col + dc
+            while 0 <= r < 8 and 0 <= c < 8:
+                if board[r][c] == EMPTY:
+                    legal_moves.append((r, c))
+                else:
+                    if (board[r][c] & 24) != color:
+                        legal_moves.append((r, c))
+                    break
+                r += dr
+                c += dc
+
+    # Queen moves
+    elif piece_type == QUEEN:
+        # Combine rook and bishop moves
+        directions = [(-1,-1), (-1,1), (1,-1), (1,1),
+                     (-1,0), (1,0), (0,-1), (0,1)]
+        for dr, dc in directions:
+            r, c = row + dr, col + dc
+            while 0 <= r < 8 and 0 <= c < 8:
+                if board[r][c] == EMPTY:
+                    legal_moves.append((r, c))
+                else:
+                    if (board[r][c] & 24) != color:
+                        legal_moves.append((r, c))
+                    break
+                r += dr
+                c += dc
+
+    # King moves
+    elif piece_type == KING:
+        for dr in [-1, 0, 1]:
+            for dc in [-1, 0, 1]:
+                if dr == 0 and dc == 0:
+                    continue
+                if is_valid(row + dr, col + dc):
+                    legal_moves.append((row + dr, col + dc))
+
+    return legal_moves
 
 def main():
     pygame.init()
@@ -162,6 +276,9 @@ def main():
     current_move_number = 1
     white_to_move = True
 
+    legal_moves = []
+    selected_pos = None
+
     running = True
     while running:
         mx, my = pygame.mouse.get_pos()
@@ -170,62 +287,67 @@ def main():
                 running = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                # Chess piece dragging
                 col = (mx - MARGIN_WIDTH) // SQUARE_SIZE
                 row = (my - MARGIN_HEIGHT) // SQUARE_SIZE
                 if 0 <= row < 8 and 0 <= col < 8 and board[row][col] != EMPTY:
-                    dragging = True
-                    selected_piece = board[row][col]
                     selected_pos = (row, col)
+                    legal_moves = get_legal_moves(board, selected_pos)
+                    # Store original piece and position
+                    selected_piece = board[row][col]
                     dragged_piece_image = pieces[selected_piece]
-                    mouse_offset = (
-                        mx - (MARGIN_WIDTH + col * SQUARE_SIZE),
-                        my - (MARGIN_HEIGHT + row * SQUARE_SIZE)
-                    )
-                    board[row][col] = EMPTY
-
-                # Scrollbar handling
-                scrollbar_x = MARGIN_WIDTH + BOARD_SIZE + MOVE_LOG_WIDTH - SCROLLBAR_WIDTH
-                scrollbar_rect = pygame.Rect(scrollbar_x, MARGIN_HEIGHT, SCROLLBAR_WIDTH, MOVE_LOG_HEIGHT)
-                if scrollbar_rect.collidepoint(mx, my):
-                    is_scrolling = True
-                    # Calculate initial scroll position
-                    total_content_height = len(move_log) * LINE_HEIGHT
-                    if total_content_height > 0:
-                        scroll_offset = (my - MARGIN_HEIGHT) / MOVE_LOG_HEIGHT * total_content_height
-                        scroll_offset = max(0, min(scroll_offset, total_content_height - MOVE_LOG_HEIGHT))
+                    mouse_offset = (mx - (MARGIN_WIDTH + col * SQUARE_SIZE),
+                                    my - (MARGIN_HEIGHT + row * SQUARE_SIZE))
+                    dragging = True
 
             elif event.type == pygame.MOUSEBUTTONUP:
-                if dragging:
-                    col = (mx - MARGIN_WIDTH) // SQUARE_SIZE
-                    row = (my - MARGIN_HEIGHT) // SQUARE_SIZE
-                    if 0 <= row < 8 and 0 <= col < 8:
-                        capture = board[row][col] != 0
+                if dragging and selected_pos:
+                    end_col = (mx - MARGIN_WIDTH) // SQUARE_SIZE
+                    end_row = (my - MARGIN_HEIGHT) // SQUARE_SIZE
+                    valid_move = False
 
-                        if capture:
-                            capture_sound.play()
-                        else:
-                            move_sound.play()
-
-                        move_notation = print_move_notation(selected_piece, selected_pos, (row, col), capture)
-                        
-                        # Update move log with white/black on same line
-                        if white_to_move:
-                            move_log.append(f"{current_move_number}. {move_notation}")
-                        else:
-                            if move_log:
-                                move_log[-1] += f" {move_notation}"
+                    if 0 <= end_row < 8 and 0 <= end_col < 8:
+                        if (end_row, end_col) in legal_moves:
+                            # Update board state
+                            start_row, start_col = selected_pos
+                            capture = board[end_row][end_col] != EMPTY
+                            
+                            # Play sound
+                            if capture:
+                                capture_sound.play()
                             else:
-                                move_log.append(f"{current_move_number}. ... {move_notation}")
-                            current_move_number += 1
-                        
-                        white_to_move = not white_to_move
-                        board[row][col] = selected_piece
-                    else:
-                        board[selected_pos[0]][selected_pos[1]] = selected_piece
-                    
+                                move_sound.play()
+
+                            # Make the move
+                            board[start_row][start_col] = EMPTY
+                            board[end_row][end_col] = selected_piece
+
+                            # Update move log
+                            move_notation = print_move_notation(selected_piece, 
+                                                              selected_pos, 
+                                                              (end_row, end_col), 
+                                                              capture)
+                            
+                            if white_to_move:
+                                move_log.append(f"{current_move_number}. {move_notation}")
+                            else:
+                                if move_log:
+                                    move_log[-1] += f" {move_notation}"
+                                else:
+                                    move_log.append(f"{current_move_number}. ... {move_notation}")
+                                current_move_number += 1
+                            
+                            white_to_move = not white_to_move
+                            valid_move = True
+
+                    if not valid_move:
+                        # Reset to original position
+                        pass  # Board was never modified during drag
+
+                    # Reset dragging state
                     dragging = False
-                    selected_piece = None
+                    selected_pos = None
+                    legal_moves = []
+
                 is_scrolling = False
 
             elif event.type == pygame.MOUSEMOTION:
@@ -272,11 +394,16 @@ def main():
                 thumb_height
             ))
 
+      win.fill(BACKGROUND_COLOR)
+        draw_board(win, legal_moves, selected_pos)
+        draw_pieces(win, pieces, selected_pos)
+        
         # Draw dragged piece
-        if dragging and dragged_piece_image is not None:
+        if dragging and selected_pos:
             piece_x = mx - mouse_offset[0]
             piece_y = my - mouse_offset[1]
             win.blit(dragged_piece_image, (piece_x, piece_y))
+
 
         pygame.display.flip()
 
