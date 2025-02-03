@@ -366,7 +366,10 @@ def main():
         draw_board(win)
         draw_pieces(win, pieces)
 
-        # Draw move log area
+        win.fill(BACKGROUND_COLOR)
+        draw_board(win, legal_moves, selected_pos)
+        draw_pieces(win, pieces, selected_pos)
+                # Draw move log area
         log_x = MARGIN_WIDTH + BOARD_SIZE + 20
         log_y = MARGIN_HEIGHT
         pygame.draw.rect(win, (50, 50, 50), (log_x, log_y, MOVE_LOG_WIDTH, MOVE_LOG_HEIGHT))
@@ -393,11 +396,6 @@ def main():
                 SCROLLBAR_WIDTH,
                 thumb_height
             ))
-
-      win.fill(BACKGROUND_COLOR)
-        draw_board(win, legal_moves, selected_pos)
-        draw_pieces(win, pieces, selected_pos)
-        
         # Draw dragged piece
         if dragging and selected_pos:
             piece_x = mx - mouse_offset[0]
