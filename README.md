@@ -12,3 +12,8 @@ Commit 2:
 2. Highlight all the legal moves of the piece selected
 3. Added special moves such as castling, en passant, promotion, check, checkmate
 4. Added sound effects for check and checkmate
+
+Commit 3:
+1. Added turn based moves
+2. Added captured pieces area and relative points
+3. Added game ending conditions such as checkmate, stalemate and other types of draws

@@ -4,7 +4,7 @@ import os
 # Constants
 BOARD_SIZE = 640  # Board size
 MARGIN_WIDTH = 300  # More margin on the width
-MARGIN_HEIGHT = 30  # Little margin on the height
+MARGIN_HEIGHT = 50  # Little margin on the height
 WINDOW_WIDTH = BOARD_SIZE + 2 * MARGIN_WIDTH
 WINDOW_HEIGHT = BOARD_SIZE + 2 * MARGIN_HEIGHT
 SQUARE_SIZE = BOARD_SIZE // 8
@@ -13,7 +13,7 @@ SQUARE_SIZE = BOARD_SIZE // 8
 LIGHT_BROWN = (205, 133, 63)
 DARK_BROWN = (139, 69, 19)
 TEXT_COLOR = (255, 255, 255)
-BACKGROUND_COLOR = (0, 0, 0)
+BACKGROUND_COLOR = (127, 127, 127)
 HIGHLIGHT_COLOR = (255, 0, 0)      # Red for legal moves
 SELECTED_COLOR = (255, 165, 0)     # Orange for selected piece
 CHECK_COLOR = (255, 0, 0)          # Red for check indicator
@@ -41,6 +41,15 @@ PROMOTION_CODES = {
     KNIGHT: 'N'
 }
 PROMOTION_SIZE = SQUARE_SIZE * 2
+
+CAPTURED_PIECE_SIZE = SQUARE_SIZE // 2
+PIECE_VALUES = {
+    PAWN: 1,
+    KNIGHT: 3,
+    BISHOP: 3,
+    ROOK: 5,
+    QUEEN: 9
+}
 
 pygame.mixer.init()
 move_sound = pygame.mixer.Sound(os.path.join("audio", "move.mp3"))
@@ -108,6 +117,7 @@ load_board_from_fen(starting_fen)
 
 def load_pieces():
     pieces = {}
+    small_pieces = {}
     piece_map = {
         WHITE | PAWN: "wp", WHITE | KNIGHT: "wn", WHITE | BISHOP: "wb", WHITE | ROOK: "wr", WHITE | QUEEN: "wq", WHITE | KING: "wk",
         BLACK | PAWN: "bp", BLACK | KNIGHT: "bn", BLACK | BISHOP: "bb", BLACK | ROOK: "br", BLACK | QUEEN: "bq", BLACK | KING: "bk"
@@ -116,7 +126,8 @@ def load_pieces():
         path = os.path.join(PIECE_FOLDER, f"{name}.png")
         image = pygame.image.load(path)
         pieces[code] = pygame.transform.smoothscale(image, (SQUARE_SIZE, SQUARE_SIZE))
-    return pieces
+        small_pieces[code] = pygame.transform.smoothscale(image, (CAPTURED_PIECE_SIZE, CAPTURED_PIECE_SIZE))
+    return pieces, small_pieces
 
 def get_algebraic_notation(row, col):
     return f"{chr(97 + col)}{8 - row}"
@@ -309,3 +320,22 @@ def get_legal_moves(board, pos, moved_positions, en_passant_target=None):
             legal_moves.append(move)
 
     return legal_moves
+
+def create_initial_board():
+    """
+    Returns an 8x8 board with the initial chess position.
+    Adjust the piece codes based on your own definitions.
+    """
+    board = [[EMPTY for _ in range(8)] for _ in range(8)]
+    
+    # Set up Black pieces.
+    board[0] = [BLACK | ROOK, BLACK | KNIGHT, BLACK | BISHOP, BLACK | QUEEN,
+                BLACK | KING, BLACK | BISHOP, BLACK | KNIGHT, BLACK | ROOK]
+    board[1] = [BLACK | PAWN for _ in range(8)]
+    
+    # Set up White pieces.
+    board[6] = [WHITE | PAWN for _ in range(8)]
+    board[7] = [WHITE | ROOK, WHITE | KNIGHT, WHITE | BISHOP, WHITE | QUEEN,
+                WHITE | KING, WHITE | BISHOP, WHITE | KNIGHT, WHITE | ROOK]
+    
+    return board
