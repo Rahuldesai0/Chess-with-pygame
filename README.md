@@ -17,3 +17,8 @@ Commit 3:
 1. Added turn based moves
 2. Added captured pieces area and relative points
 3. Added game ending conditions such as checkmate, stalemate and other types of draws
+
+Commit 4:
+1. Preventing castle during check or when intermediate square attacked
+2. Put random move playing AI and main menu screen to choose which side is Player or AI
+3. Put all AI code into separate file which will handle all the move selection logic

@@ -92,7 +92,7 @@ def load_board_from_fen(fen):
                 board[row_idx][col_idx] = fen_piece_map[char]
                 col_idx += 1
 
-def generate_fen(en_passant_target=None):
+def generate_fen(board, active_color, castling_rights, en_passant_target, halfmove=0, fullmove=1):
     fen_rows = []
     for row in board:
         empty_count = 0
@@ -108,8 +108,9 @@ def generate_fen(en_passant_target=None):
         if empty_count > 0:
             fen_row += str(empty_count)
         fen_rows.append(fen_row)
-    en_passant_square = '-' if en_passant_target is None else get_algebraic_notation(en_passant_target[0], en_passant_target[1])
-    return "/".join(fen_rows) + f" w KQkq {en_passant_square} 0 1"
+    ep = '-' if en_passant_target is None else get_algebraic_notation(en_passant_target[0], en_passant_target[1])
+    return "/".join(fen_rows) + f" {active_color} {castling_rights} {ep} {halfmove} {fullmove}"
+
 
 # Default starting position FEN
 starting_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -163,15 +164,34 @@ def find_king(board, color):
                 return (r, c)
     return None
 
+def get_castling_rights(board, moved_positions):
+    rights = ""
+    # For White:
+    if (7, 4) not in moved_positions and board[7][4] == (WHITE | KING):
+         if (7, 7) not in moved_positions and board[7][7] == (WHITE | ROOK):
+              rights += "K"
+         if (7, 0) not in moved_positions and board[7][0] == (WHITE | ROOK):
+              rights += "Q"
+    # For Black:
+    if (0, 4) not in moved_positions and board[0][4] == (BLACK | KING):
+         if (0, 7) not in moved_positions and board[0][7] == (BLACK | ROOK):
+              rights += "k"
+         if (0, 0) not in moved_positions and board[0][0] == (BLACK | ROOK):
+              rights += "q"
+    return rights if rights != "" else "-"
+
+
 def is_square_under_attack(board, pos, attacker_color, moved_positions, en_passant_target):
     for r in range(8):
         for c in range(8):
             piece = board[r][c]
             if piece != EMPTY and (piece & 24) == attacker_color:
-                moves = get_pseudo_legal_moves(board, (r, c), moved_positions, en_passant_target)
+                # Do not consider castling moves when checking for attacks.
+                moves = get_pseudo_legal_moves(board, (r, c), moved_positions, en_passant_target, ignore_castling=True)
                 if pos in moves:
                     return True
     return False
+
 
 def is_in_check(board, color, moved_positions, en_passant_target):
     king_pos = find_king(board, color)
@@ -180,7 +200,7 @@ def is_in_check(board, color, moved_positions, en_passant_target):
     attacker_color = BLACK if color == WHITE else WHITE
     return is_square_under_attack(board, king_pos, attacker_color, moved_positions, en_passant_target)
 
-def get_pseudo_legal_moves(board, pos, moved_positions, en_passant_target=None):
+def get_pseudo_legal_moves(board, pos, moved_positions, en_passant_target=None, ignore_castling=False):
     row, col = pos
     piece = board[row][col]
     if piece == EMPTY:
@@ -272,7 +292,7 @@ def get_pseudo_legal_moves(board, pos, moved_positions, en_passant_target=None):
 
     # King moves
     elif piece_type == KING:
-        # Regular moves
+        # Regular king moves
         for dr in [-1, 0, 1]:
             for dc in [-1, 0, 1]:
                 if dr == 0 and dc == 0:
@@ -280,14 +300,41 @@ def get_pseudo_legal_moves(board, pos, moved_positions, en_passant_target=None):
                 if is_valid(row + dr, col + dc):
                     moves.append((row + dr, col + dc))
 
-        # Castling
-        king_pos = (row, col)
-        if king_pos in CASTLING_ROOK_MOVES:
-            for castle_end, (rook_from, rook_to) in CASTLING_ROOK_MOVES[king_pos].items():
-                if king_pos in moved_positions or rook_from in moved_positions:
-                    continue
-                if (board[rook_from[0]][rook_from[1]] == (color | ROOK) and 
-                    all(board[r][c] == EMPTY for (r,c) in [rook_from, (row, (col+rook_from[1])//2), castle_end] if (r,c) != rook_from)):
+        # Only add castling moves if we're not ignoring them.
+        if not ignore_castling:
+            enemy_color = BLACK if color == WHITE else WHITE
+            # The king cannot castle if it is currently in check.
+            if is_square_under_attack(board, (row, col), enemy_color, moved_positions, en_passant_target):
+                pass  # king in check; skip castling
+            elif (row, col) in CASTLING_ROOK_MOVES:
+                for castle_end, (rook_from, rook_to) in CASTLING_ROOK_MOVES[(row, col)].items():
+                    # Check if the king or rook has moved.
+                    if (row, col) in moved_positions or rook_from in moved_positions:
+                        continue
+                    # Ensure the rook is still in place.
+                    if board[rook_from[0]][rook_from[1]] != (color | ROOK):
+                        continue
+
+                    # Determine the squares between the king and rook.
+                    if castle_end[1] > col:
+                        # Kingside castling.
+                        between_squares = [(row, col+1), (row, col+2)]
+                        king_path = between_squares  # king passes through these squares
+                    else:
+                        # Queenside castling.
+                        between_squares = [(row, col-1), (row, col-2), (row, col-3)]
+                        king_path = [(row, col-1), (row, col-2)]  # king passes through these two squares
+
+                    # Ensure the path between king and rook is empty.
+                    if any(board[r][c] != EMPTY for (r, c) in between_squares):
+                        continue
+
+                    # Ensure none of the squares that the king moves through or lands on are under attack.
+                    if any(is_square_under_attack(board, square, enemy_color, moved_positions, en_passant_target)
+                           for square in king_path):
+                        continue
+
+                    # If all conditions are met, allow the castling move.
                     moves.append(castle_end)
 
     return moves
