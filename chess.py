@@ -119,70 +119,66 @@ def menu_loop(win):
         return "black_vs_ai"
     elif selected_mode == "AI vs AI":
         return "ai_vs_ai"
-
+    
 def ai_move_function(color, board, moved_positions, en_passant_target,
                      captured_pieces, move_log, position_history, current_move_number, white_to_move):
     """
-    This function converts the current game state into a FEN string,
-    calls get_ai_move(fen) from the separate AI module to decide on a move,
+    This function converts the current state into a FEN string,
+    calls get_ai_move(fen) from your separate AI module to decide on a move,
     then applies that move (handling en passant, castling, random promotion, etc.),
-    updates captured pieces and move log (with check/checkmate symbols),
-    and returns the updated state.
+    plays appropriate sound effects (for move, capture, check, or checkmate),
+    updates captured pieces, move log, and FEN history (for three‑fold repetition),
+    and returns the updated game state.
     """
-    # Determine active color from white_to_move.
+    # 1. Convert the current state to a FEN string.
     active_color = "w" if white_to_move else "b"
-    # Compute castling rights from board state and moved_positions.
     castling_rights = get_castling_rights(board, moved_positions)
-    # Generate a FEN string (halfmove and fullmove set to defaults).
     current_fen = generate_fen(board, active_color, castling_rights, en_passant_target, halfmove=0, fullmove=1)
     
-    # Call the separate AI move-deciding function (which returns a move in ((start_row, start_col), (end_row, end_col)) format).
+    # 2. Get the AI move from the external module.
     best_move = get_ai_move(current_fen)
-    
-    # If no legal moves are available, signal game over.
     if best_move is None:
+        # No legal moves available.
         return board, moved_positions, en_passant_target, captured_pieces, move_log, position_history, current_move_number, True
 
-    # Unpack the move returned by the AI module.
+    # Unpack the move.
     start, end = best_move
     piece = board[start[0]][start[1]]
     capture = board[end[0]][end[1]] != EMPTY
-    is_en_passant = False
     captured_piece_code = None
     start_row, start_col = start
     end_row, end_col = end
-
-    # En passant check:
+    
+    # 3. En passant check.
     if (piece & 7) == PAWN and (end_row, end_col) == en_passant_target:
         direction = -1 if (piece & 24) == WHITE else 1
         captured_pawn_row = end_row - direction
         captured_piece_code = board[captured_pawn_row][end_col]
         board[captured_pawn_row][end_col] = EMPTY
-        is_en_passant = True
         capture = True
     else:
         if capture:
             captured_piece_code = board[end_row][end_col]
-
-    # Apply the move.
+            
+    # 4. Apply the move.
     board[start_row][start_col] = EMPTY
     board[end_row][end_col] = piece
 
-    # Castling check:
+    # 5. Castling check.
     if (piece & 7) == KING and abs(end_col - start_col) == 2:
         rook_from, rook_to = CASTLING_ROOK_MOVES[(start_row, start_col)][(end_row, end_col)]
         board[rook_to[0]][rook_to[1]] = board[rook_from[0]][rook_from[1]]
         board[rook_from[0]][rook_from[1]] = EMPTY
         moved_positions.add(rook_from)
 
-    # Update en passant target:
+    # 6. Update en passant target.
     if (piece & 7) == PAWN and abs(start_row - end_row) == 2:
         direction = -1 if (piece & 24) == WHITE else 1
         en_passant_target = (start_row + direction, start_col)
     else:
         en_passant_target = None
 
-    # Promotion check: choose a random promotion piece.
+    # 7. Promotion check: choose a random promotion piece.
     if (piece & 7) == PAWN:
         color_piece = piece & 24
         if (color_piece == WHITE and end_row == 0) or (color_piece == BLACK and end_row == 7):
@@ -197,7 +193,7 @@ def ai_move_function(color, board, moved_positions, en_passant_target,
                 captured_pieces['white'].append(BLACK | PAWN)
                 bonus_black += PIECE_VALUES[new_piece & 7]
 
-    # Record captured piece if capture occurred.
+    # 8. Record captured piece if a capture occurred.
     if capture and captured_piece_code is not None:
         if color == WHITE:
             captured_pieces['white'].append(captured_piece_code)
@@ -205,9 +201,18 @@ def ai_move_function(color, board, moved_positions, en_passant_target,
             captured_pieces['black'].append(captured_piece_code)
 
     moved_positions.add((start_row, start_col))
+    
+    # 9. Play sound effects.
+    if capture:
+        capture_sound.play()
+    else:
+        move_sound.play()
+    
+    # 10. Create move notation (including check or checkmate symbols).
     move_notation = print_move_notation(piece, start, end, capture)
     opponent_color = BLACK if color == WHITE else WHITE
     move_notation = add_check_symbols(move_notation, board, moved_positions, en_passant_target, opponent_color)
+    
     if color == WHITE:
         move_log.append(f"{current_move_number}. {move_notation}")
     else:
@@ -216,40 +221,47 @@ def ai_move_function(color, board, moved_positions, en_passant_target,
         else:
             move_log.append(f"{current_move_number}. ... {move_notation}")
         current_move_number += 1
-
-    # Check for game termination conditions.
-    has_legal_moves = False
-    for r in range(8):
-        for c in range(8):
-            p = board[r][c]
-            if p != EMPTY and (p & 24) == opponent_color:
-                if get_legal_moves(board, (r, c), moved_positions, en_passant_target):
-                    has_legal_moves = True
-                    break
-        if has_legal_moves:
-            break
-    game_over = False
-    if not has_legal_moves:
-        in_check = is_in_check(board, opponent_color, moved_positions, en_passant_target)
-        if in_check:
-            winner = "White" if opponent_color == BLACK else "Black"
-            move_log.append(f"{winner} won by checkmate")
-        else:
-            move_log.append("Draw by stalemate")
-        game_over = True
-    elif is_insufficient_material():
+    
+    # 11. Check for game termination conditions.
+    # First, check for insufficient material.
+    if is_insufficient_material():
         move_log.append("Draw by insufficient material")
         game_over = True
     else:
-        # Update FEN history for three-fold repetition.
-        active_color = "w" if white_to_move else "b"
-        castling_rights = get_castling_rights(board, moved_positions)
-        current_fen = generate_fen(board, active_color, castling_rights, en_passant_target, halfmove=0, fullmove=1)
-        fen_part = ' '.join(current_fen.split()[:4])
-        position_history.append(fen_part)
-        if position_history.count(fen_part) >= 3:
-            move_log.append("Draw by three-fold repetition")
+        has_legal_moves = False
+        for r in range(8):
+            for c in range(8):
+                p = board[r][c]
+                if p != EMPTY and (p & 24) == opponent_color:
+                    if get_legal_moves(board, (r, c), moved_positions, en_passant_target):
+                        has_legal_moves = True
+                        break
+            if has_legal_moves:
+                break
+
+        if not has_legal_moves:
+            in_check = is_in_check(board, opponent_color, moved_positions, en_passant_target)
+            if in_check:
+                winner = "White" if opponent_color == BLACK else "Black"
+                move_log.append(f"{winner} won by checkmate")
+                checkmate_sound.play()
+            else:
+                move_log.append("Draw by stalemate")
             game_over = True
+        else:
+            # If the move gives check (but not mate), play the check sound.
+            if is_in_check(board, opponent_color, moved_positions, en_passant_target):
+                check_sound.play()
+            active_color = "w" if white_to_move else "b"
+            castling_rights = get_castling_rights(board, moved_positions)
+            current_fen = generate_fen(board, active_color, castling_rights, en_passant_target, halfmove=0, fullmove=1)
+            fen_part = ' '.join(current_fen.split()[:4])
+            position_history.append(fen_part)
+            if position_history.count(fen_part) >= 3:
+                move_log.append("Draw by three-fold repetition")
+                game_over = True
+            else:
+                game_over = False  # Explicitly set game_over to False if no termination condition was met.
 
     return board, moved_positions, en_passant_target, captured_pieces, move_log, position_history, current_move_number, game_over
 

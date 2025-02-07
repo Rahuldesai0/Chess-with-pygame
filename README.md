@@ -22,3 +22,4 @@ Commit 4:
 1. Preventing castle during check or when intermediate square attacked
 2. Put random move playing AI and main menu screen to choose which side is Player or AI
 3. Put all AI code into separate file which will handle all the move selection logic
+4. Fixed game not detecting insufficient material in AI vs AI
