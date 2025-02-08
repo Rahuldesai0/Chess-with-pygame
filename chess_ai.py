@@ -1,46 +1,5 @@
 import random
-from util import EMPTY, get_legal_moves, WHITE, BLACK, fen_piece_map
-
-def parse_fen(fen):
-    """
-    Parses a FEN string and returns a tuple:
-      (board, active_color, castling, en_passant_target, halfmove, fullmove)
-    
-    - board: 8x8 list of integers (using your piece codes)
-    - active_color: 'w' or 'b'
-    - castling: a string of castling rights (e.g., "KQkq" or "-")
-    - en_passant_target: a tuple (row, col) or None
-    - halfmove: integer (halfmove clock)
-    - fullmove: integer (fullmove number)
-    """
-    parts = fen.split()
-    board_str = parts[0]
-    active_color = parts[1]
-    castling = parts[2]
-    en_passant = parts[3]
-    halfmove = int(parts[4])
-    fullmove = int(parts[5])
-    
-    board = []
-    rows = board_str.split('/')
-    for row in rows:
-        board_row = []
-        for char in row:
-            if char.isdigit():
-                board_row.extend([EMPTY] * int(char))
-            else:
-                board_row.append(fen_piece_map[char])
-        board.append(board_row)
-    
-    if en_passant == '-':
-        en_passant_target = None
-    else:
-        # Convert algebraic notation to board coordinates.
-        file = ord(en_passant[0]) - ord('a')
-        rank = 8 - int(en_passant[1])
-        en_passant_target = (rank, file)
-    
-    return board, active_color, castling, en_passant_target, halfmove, fullmove
+from util import EMPTY, parse_fen, get_legal_moves, WHITE, BLACK, fen_piece_map
 
 def get_ai_move(fen):
     """
